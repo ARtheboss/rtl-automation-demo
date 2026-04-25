@@ -20,8 +20,8 @@ module fpu_add (
     reg sign_a, sign_b, sign_r;
     reg [7:0] exp_a, exp_b, exp_r, exp_diff;
     reg [23:0] mant_a, mant_b;  // With implicit 1
-    reg [23:0] mant_a_align, mant_b_align;
     reg [24:0] mant_r;          // Extra bit for overflow
+    reg [23:0] mant_aligned;
 
     wire a_is_zero, b_is_zero;
     wire a_is_inf, b_is_inf;
@@ -39,64 +39,61 @@ module fpu_add (
             result <= 32'b0;
             overflow <= 1'b0;
             underflow <= 1'b0;
-        end else begin
-            // Default: valid_out is a one-cycle pulse high only when valid_in
-            // was asserted this cycle (last NBA below wins when valid_in).
-            valid_out <= 1'b0;
-            if (valid_in) begin
+        end else if (valid_in) begin
             // Extract fields
             sign_a = operand_a[31];
             sign_b = operand_b[31] ^ op_sub;  // Flip sign for subtraction
             exp_a = operand_a[30:23];
             exp_b = operand_b[30:23];
 
-            // Normalized operands: implicit leading 1 (denormals not fully handled)
+            // BUG: Not adding implicit 1 for denormalized numbers correctly
             mant_a = {1'b1, operand_a[22:0]};
             mant_b = {1'b1, operand_b[22:0]};
 
-            // Align both mantissas to the larger exponent
-            if (exp_a >= exp_b) begin
-                exp_r = exp_a;
-                exp_diff = exp_a - exp_b;
-                mant_a_align = mant_a;
-                mant_b_align = mant_b >> exp_diff;
-            end else begin
-                exp_r = exp_b;
+            // Align mantissas - BUG: comparison is backwards
+            if (exp_a < exp_b) begin
                 exp_diff = exp_b - exp_a;
-                mant_a_align = mant_a >> exp_diff;
-                mant_b_align = mant_b;
-            end
+                // BUG: shifting wrong operand
+                mant_aligned = mant_b >> exp_diff;
+                exp_r = exp_a;  // BUG: should use larger exponent
 
-            // Add or subtract magnitudes based on effective signs
-            if (sign_a == sign_b) begin
-                mant_r = mant_a_align + mant_b_align;
-                sign_r = sign_a;
-            end else begin
-                if (mant_a_align >= mant_b_align) begin
-                    mant_r = mant_a_align - mant_b_align;
+                // Add or subtract based on signs
+                if (sign_a == sign_b) begin
+                    mant_r = mant_a + mant_aligned;
                     sign_r = sign_a;
                 end else begin
-                    mant_r = mant_b_align - mant_a_align;
-                    sign_r = sign_b;
+                    // BUG: wrong subtraction order
+                    mant_r = mant_a - mant_aligned;
+                    sign_r = sign_a;
+                end
+            end else begin
+                exp_diff = exp_a - exp_b;
+                mant_aligned = mant_b >> exp_diff;
+                exp_r = exp_a;
+
+                if (sign_a == sign_b) begin
+                    mant_r = mant_a + mant_aligned;
+                    sign_r = sign_a;
+                end else begin
+                    if (mant_a >= mant_aligned) begin
+                        mant_r = mant_a - mant_aligned;
+                        sign_r = sign_a;
+                    end else begin
+                        mant_r = mant_aligned - mant_a;
+                        // BUG: sign should flip
+                        sign_r = sign_a;
+                    end
                 end
             end
 
-            // Normalize: right if sum carried out of implicit MSB
+            // Normalize result - BUG: incomplete normalization
             if (mant_r[24]) begin
+                // Overflow, shift right
                 mant_r = mant_r >> 1;
                 exp_r = exp_r + 1;
             end
-            // Left-justify after subtract (or small sum): restore implicit 1 at bit 23
-            while (mant_r != 0 && !mant_r[23] && exp_r > 1) begin
-                mant_r = mant_r << 1;
-                exp_r = exp_r - 1;
-            end
+            // BUG: Missing left shift normalization for small results
 
-            if (mant_r == 0) begin
-                result <= 32'b0;
-                overflow <= 1'b0;
-                underflow <= 1'b0;
-            end else
             // Check for overflow
             if (exp_r == 8'hFF) begin
                 overflow <= 1'b1;
@@ -109,7 +106,8 @@ module fpu_add (
             end
 
             valid_out <= 1'b1;
-            end
+        end else begin
+            valid_out <= 1'b0;
         end
     end
 
