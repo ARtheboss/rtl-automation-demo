@@ -29,6 +29,9 @@ module tb_fpu_top;
     reg        expected_overflow;
     reg        expected_underflow;
 
+    // Dump filename (for FST/VCD selection)
+    reg [256*8-1:0] dumpfile;
+
     // Instantiate DUT
     fpu_top dut (
         .clk        (clk),
@@ -126,8 +129,10 @@ module tb_fpu_top;
 
     // Main test sequence with parallel timeout
     initial begin
-        // Setup waveform dump
-        $dumpfile("fpu_sim.vcd");
+        // Setup waveform dump (use +dumpfile=filename.fst for FST format)
+        if (!$value$plusargs("dumpfile=%s", dumpfile))
+            dumpfile = "fpu_sim.vcd";
+        $dumpfile(dumpfile);
         $dumpvars(0, tb_fpu_top);
 
         // Initialize

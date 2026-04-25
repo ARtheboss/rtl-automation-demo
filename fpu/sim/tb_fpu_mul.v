@@ -15,6 +15,9 @@ module tb_fpu_mul;
 
     integer errors;
 
+    // Dump filename (for FST/VCD selection)
+    reg [256*8-1:0] dumpfile;
+
     // DUT
     fpu_mul dut (
         .clk        (clk),
@@ -48,7 +51,10 @@ module tb_fpu_mul;
     endtask
 
     initial begin
-        $dumpfile("fpu_mul_sim.vcd");
+        // Setup waveform dump (use +dumpfile=filename.fst for FST format)
+        if (!$value$plusargs("dumpfile=%s", dumpfile))
+            dumpfile = "fpu_mul_sim.vcd";
+        $dumpfile(dumpfile);
         $dumpvars(0, tb_fpu_mul);
 
         errors = 0;

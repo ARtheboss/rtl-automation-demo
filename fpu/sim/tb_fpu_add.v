@@ -16,6 +16,9 @@ module tb_fpu_add;
 
     integer errors;
 
+    // Dump filename (for FST/VCD selection)
+    reg [256*8-1:0] dumpfile;
+
     // DUT
     fpu_add dut (
         .clk        (clk),
@@ -51,7 +54,10 @@ module tb_fpu_add;
     endtask
 
     initial begin
-        $dumpfile("fpu_add_sim.vcd");
+        // Setup waveform dump (use +dumpfile=filename.fst for FST format)
+        if (!$value$plusargs("dumpfile=%s", dumpfile))
+            dumpfile = "fpu_add_sim.vcd";
+        $dumpfile(dumpfile);
         $dumpvars(0, tb_fpu_add);
 
         errors = 0;
@@ -75,9 +81,8 @@ module tb_fpu_add;
                 op_sub = 0;
                 valid_in = 1;
                 @(posedge clk);
+                @(negedge clk);  // sample after NBA updates valid_out/result
                 valid_in = 0;
-                @(posedge clk);
-                wait(valid_out);
                 show_float(operand_a, "A");
                 show_float(operand_b, "B");
                 show_float(result, "Result");
@@ -96,9 +101,8 @@ module tb_fpu_add;
                 op_sub = 0;
                 valid_in = 1;
                 @(posedge clk);
+                @(negedge clk);
                 valid_in = 0;
-                @(posedge clk);
-                wait(valid_out);
                 show_float(operand_a, "A");
                 show_float(operand_b, "B");
                 show_float(result, "Result");
@@ -117,9 +121,8 @@ module tb_fpu_add;
                 op_sub = 1;
                 valid_in = 1;
                 @(posedge clk);
+                @(negedge clk);
                 valid_in = 0;
-                @(posedge clk);
-                wait(valid_out);
                 show_float(operand_a, "A");
                 show_float(operand_b, "B");
                 show_float(result, "Result");
@@ -138,9 +141,8 @@ module tb_fpu_add;
                 op_sub = 1;
                 valid_in = 1;
                 @(posedge clk);
+                @(negedge clk);
                 valid_in = 0;
-                @(posedge clk);
-                wait(valid_out);
                 show_float(operand_a, "A");
                 show_float(operand_b, "B");
                 show_float(result, "Result");
